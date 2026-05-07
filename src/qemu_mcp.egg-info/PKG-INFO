@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: qemu-mcp
+Version: 0.1.0
+Summary: Universal QEMU Lifecycle MCP with Auto-Detection
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: fastmcp
+Requires-Dist: qemu
+Requires-Dist: pyelftools
+Requires-Dist: psutil

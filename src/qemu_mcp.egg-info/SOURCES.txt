@@ -1,0 +1,14 @@
+README.md
+pyproject.toml
+src/qemu_mcp/__init__.py
+src/qemu_mcp/detector.py
+src/qemu_mcp/main.py
+src/qemu_mcp/manager.py
+src/qemu_mcp/server.py
+src/qemu_mcp.egg-info/PKG-INFO
+src/qemu_mcp.egg-info/SOURCES.txt
+src/qemu_mcp.egg-info/dependency_links.txt
+src/qemu_mcp.egg-info/entry_points.txt
+src/qemu_mcp.egg-info/requires.txt
+src/qemu_mcp.egg-info/top_level.txt
+tests/test_detector.py

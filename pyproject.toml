@@ -1,0 +1,16 @@
+[project]
+name = "qemu-mcp"
+version = "0.1.0"
+description = "Universal QEMU Lifecycle MCP with Auto-Detection"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastmcp",     # MCP Framework
+    "qemu",        # Official QEMU Python SDK (for QEMUMachine)
+    "pyelftools",  # Industrial ELF analysis
+    "psutil"       # Safe process management
+]
+
+[project.scripts]
+qemu-mcp = "qemu_mcp.main:main"
+

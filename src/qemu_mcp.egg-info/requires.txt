@@ -1,0 +1,4 @@
+fastmcp
+qemu
+pyelftools
+psutil
