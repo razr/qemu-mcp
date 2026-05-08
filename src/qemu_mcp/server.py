@@ -1,3 +1,4 @@
+import os
 from fastmcp import FastMCP
 from .manager import QEMUManager
 
@@ -23,4 +24,18 @@ def stop_qemu() -> str:
 def get_status() -> str:
     """Returns the current execution status of the VM via QMP."""
     return manager.status()
+
+@mcp.tool()
+def get_console_output(lines: int = 50):
+    """
+    Reads the last N lines of the QEMU serial console log.
+    Use this to check the vxWorks boot sequence or debug crashes.
+    """
+    log_path = "/app/qemu_vms.log"
+    if not os.path.exists(log_path):
+        return "No log file found. VM might not be running or log is empty."
+
+    with open(log_path, "r") as f:
+        content = f.readlines()
+        return "".join(content[-lines:])
 

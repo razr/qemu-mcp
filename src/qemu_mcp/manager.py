@@ -28,11 +28,14 @@ class QEMUManager:
                 "u=target pw=vxTarget o=gei0"
             )
 
+            self.log_path = "/app/qemu_vms.log"
+
             # 4. Configure Arguments
             args = [
                 "-m", "1G",
                 "-kernel", kernel_path,
                 "-nographic",
+                "-serial", f"file:{self.log_path}",
                 "-append", bootline,
                 "-net", "nic,model=e1000" if self.info["arch"] == "x86_64" else "nic",
                 "-net", "user,hostfwd=tcp::2121-:21,hostfwd=tcp::1534-:1534"
