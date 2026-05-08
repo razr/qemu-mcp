@@ -10,12 +10,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Определяем версию установленного QEMU и скачиваем соответствующий код
+# Define version and clone the FULL repository path
 RUN QEMU_VERSION=$(qemu-system-x86_64 --version | grep -oP 'version \K[0-9]+\.[0-9]+') \
-    && echo "Matching QEMU version: $QEMU_VERSION" \
-    && git clone --depth 1 --branch v$QEMU_VERSION.0 https://gitlab.com /tmp/qemu \
-    || git clone --depth 1 --branch v$QEMU_VERSION.7 https://gitlab.com /tmp/qemu \
-    && pip install /tmp/qemu/python \
+    && echo "Installing python tools for QEMU $QEMU_VERSION" \
+    && git clone --depth 1 --branch "stable-$QEMU_VERSION" https://gitlab.com/qemu-project/qemu.git /tmp/qemu \
+    && cd /tmp/qemu/python \
+    && pip install . \
     && rm -rf /tmp/qemu
 
 COPY . .
