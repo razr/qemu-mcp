@@ -39,3 +39,28 @@ def get_console_output(lines: int = 50):
         content = f.readlines()
         return "".join(content[-lines:])
 
+@mcp.tool()
+def rtp_exec(rtp_name: str) -> str:
+    """
+    Executes an RTP. Automatically switches to cmd mode if needed.
+    """
+    # 1. Ensure we are in the correct shell for 'rtp exec'
+    manager.ensure_cmd_mode()
+
+    # 2. Execute the command
+    command = f"rtp exec {rtp_name}\n"
+    if manager.send_input(command):
+        return f"Ensured cmd mode and executed: {command.strip()}"
+    return "Error: Could not send command to QEMU"
+
+@mcp.tool()
+def toggle_shell() -> str:
+    """Toggles between C and cmd shell."""
+    if manager.shell_mode == "C":
+        manager.send_input("cmd\n")
+        manager.shell_mode = "cmd"
+    else:
+        manager.send_input("C")
+        manager.shell_mode = "C"
+    return f"Shell toggled to: {manager.shell_mode}"
+

@@ -6,6 +6,7 @@ class QEMUManager:
     def __init__(self):
         self.vm = None
         self.info = None
+        self.shell_mode = "C"  # Default VxWorks state
 
     def start(self, kernel_path: str, extra_args: str = None):
         """Detects arch and launches VxWorks via QEMUMachine."""
@@ -46,6 +47,11 @@ class QEMUManager:
 
             self.vm.add_args(*args)
 
+            # IMPORTANT: Tell QEMUMachine to capture/allow stdin
+            # This ensures the underlying subprocess has a writable pipe
+            self.vm._console_set = True
+
+
             # 5. Launch
             self.vm.launch()
             return f"Started {qemu_bin} for {self.info['arch']}. QMP active."
@@ -75,3 +81,19 @@ class QEMUManager:
         except Exception as e:
             return f"Status: RUNNING (QMP Error: {str(e)})"
 
+    def send_input(self, data: str):
+        """Sends raw string input to the QEMU serial console via QEMUMachine process."""
+        # QEMUMachine stores the subprocess in self.vm._process
+        if self.vm and self.vm.is_running() and self.vm._process.stdin:
+            self.vm._process.stdin.write(data.encode())
+            self.vm._process.stdin.flush()
+            return True
+        return False
+
+    def ensure_cmd_mode(self):
+        """Switches to cmd mode if currently in C mode."""
+        if self.shell_mode == "C":
+            self.send_input("cmd\n")
+            self.shell_mode = "cmd"
+            import time
+            time.sleep(0.1) # Small delay for shell transition
