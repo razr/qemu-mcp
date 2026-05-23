@@ -9,9 +9,12 @@ def test_live_qemu_serial_interaction():
     Connects directly to the live running QEMU instance on port 15555,
     drains the boot logs, sends a newline, and reads the real VxWorks prompt.
     """
-    # Create the minimal wrapper object required by the console constructor
+    # 1. Instantiate the minimal wrapper object required by the new console logic
     mock_vm = MagicMock()
-    mock_vm.machine.is_running.return_value = True
+    
+    # 2. Stub the raw process wrapper handle to simulate a healthy running backend
+    mock_vm._process = MagicMock()
+    mock_vm._process.poll.return_value = None  # None indicates the process is still running
 
     # Connect directly to your live running QEMU process on port 15555
     console = QEMUConsole(mock_vm)

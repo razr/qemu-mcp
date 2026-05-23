@@ -47,17 +47,19 @@ class QEMUConsole:
 
     def send(self, data: str) -> bool:
         """Pushes an encoded text string down the serial socket."""
-        if not self._connect_socket():
+        if not self.vm_object or not self.vm_object._process or self.vm_object._process.poll() is not None:
             return False
         try:
-            self.sock.sendall(data.encode("utf-8"))
-            return True
+            if self._connect_socket():
+                self.sock.sendall(data.encode("utf-8"))
+                return True
+            return False
         except Exception:
             return False
 
     def read_available(self) -> str:
         """Drains all currently unread characters from the console socket dynamically."""
-        if not self._connect_socket():
+        if not self.vm_object or not self.vm_object._process or self.vm_object._process.poll() is not None:
             return ""
 
         output_chunks = []

@@ -8,7 +8,6 @@ license = { text = "MIT" }
 
 dependencies = [
     "fastmcp>=0.4.1",
-    "qemu-qmp>=0.0.6",  # FIXED: Point to the actual framework layout on PyPI
     "pyelftools>=0.31"
 ]
 

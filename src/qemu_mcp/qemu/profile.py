@@ -32,8 +32,7 @@ class QEMUProfile:
         return [
             "-m", "1024M",
             "-kernel", kernel_path,
-            "-display", "none",
-            "-monitor", "none"
+            "-display", "none"
         ]
 
     def platform_args(self) -> List[str]: return self.config.get("platform_args", [])
