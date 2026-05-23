@@ -6,7 +6,7 @@ PROFILES: Dict[str, Dict[str, Any]] = {
         "os": "vxworks",
         "arch": "x86_64",
         "qemu_bin": "qemu-system-x86_64",
-        "platform_args": ["-cpu", "Nehalem", "-smp", "4"],
+        "platform_args": ["-cpu", "Nehalem", "-smp", "4", "-enable-kvm"],
         "network_args": [
             "-net", "nic", 
             "-net", "user,hostfwd=tcp::1534-:1534,hostfwd=tcp::2345-:2345"
