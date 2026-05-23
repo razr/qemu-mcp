@@ -17,8 +17,9 @@ class QEMUConsole:
 
     def _connect_socket(self) -> bool:
         """Establishes connection to the QEMU serial socket using a safe handshake."""
-        if self.sock:
-            return True
+        parent_vm = self.machine if hasattr(self, "machine") else getattr(self, "vm", None)
+        target_host = parent_vm.host_target if parent_vm and hasattr(parent_vm, "host_target") else "127.0.0.1"
+
         try:
             # Create a standard TCP Socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -29,7 +30,7 @@ class QEMUConsole:
 
             for attempt in range(5):
                 try:
-                    self.sock.connect(("127.0.0.1", 15555))
+                    self.sock.connect((target_host, 15555))
                     # Once connection is confirmed, flip it back to non-blocking mode
                     # for our safe runtime selection polling
                     self.sock.setblocking(False)

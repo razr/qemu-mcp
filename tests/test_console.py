@@ -1,6 +1,7 @@
 # tests/test_console.py
 import time
 import pytest
+import os
 from unittest.mock import MagicMock
 from qemu_mcp.qemu.console import QEMUConsole
 
@@ -11,6 +12,7 @@ def test_live_qemu_serial_interaction():
     """
     # 1. Instantiate the minimal wrapper object required by the new console logic
     mock_vm = MagicMock()
+    mock_vm.host_target = os.getenv("MCP_QEMU_HOST", "127.0.0.1")
 
     # 2. Stub the raw process wrapper handle to simulate a healthy running backend
     mock_vm._process = MagicMock()

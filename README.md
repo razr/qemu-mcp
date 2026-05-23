@@ -36,16 +36,17 @@ Add the execution block to your `~/.config/Claude/claude_desktop_config.json` fi
 ```json
 {
   "mcpServers": {
-    "qemu-vxworks-orchestrator": {
+    "qemu-mcp": {
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
+        "-e", "MCP_QEMU_HOST=0.0.0.0",
         "--device=/dev/kvm",
         "-p", "15555:15555",
         "-p", "15556:15556",
         "-p", "1534:1534",
         "-p", "2345:2345",
-        "-v", "$WIND_HOME:/kernels:ro",
+        "-v", "$WIND_HOME:/wrsdk:ro",
         "qemu-mcp-server"
       ]
     }
