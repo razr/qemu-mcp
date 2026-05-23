@@ -2,7 +2,6 @@
 import os
 import time
 import pytest
-from qemu.machine.machine import QEMUMachineError
 
 from qemu_mcp.qemu.vm import QEMUVirtualMachine
 from qemu_mcp.runtimes.detector import get_arch_info
@@ -36,19 +35,17 @@ def test_qemu_vxworks_lifecycle(kernel_path):
         print(f" -> Retrieved Hypervisor Status Matrix: {vm_status}")
         assert vm_status["status"] == "RUNNING"
 
-    except (QEMUMachineError, Exception) as e:
+    except Exception as e: # Заменили (QEMUMachineError, Exception) на стандартный Exception
         print(f"\n[CRITICAL ERROR] QEMU failed to establish a handshake: {e}")
         print("=================== QEMU CONSOLE DUMP ===================")
 
-        # Read the exact background console output log to capture why the kernel faulted
+        # Читаем лог-файл напрямую с диска, так как vm.machine больше нет
         log_path = getattr(vm, 'log_path', '/app/qemu_vms.log')
         if os.path.exists(log_path):
             with open(log_path, 'r') as f:
                 print(f.read())
         else:
-            print(f"Log file not found at {log_path}. checking QEMU process stderr instead...")
-            if vm.machine and hasattr(vm.machine, 'get_log'):
-                print(vm.machine.get_log())
+            print(f"Log file not found at {log_path}.")
 
         print("=========================================================")
         pytest.fail("QEMU subprocess crashed immediately upon execution.")

@@ -2,7 +2,6 @@
 import os
 import time
 import pytest
-from qemu.machine.machine import QEMUMachineError
 
 from qemu_mcp.qemu.vm import QEMUVirtualMachine
 from qemu_mcp.runtimes.detector import get_arch_info

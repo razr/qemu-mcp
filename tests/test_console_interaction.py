@@ -31,10 +31,14 @@ def test_vxworks_console_interaction(kernel_path):
 
         # --- FIX: RE-CONNECT SOCKET FRESHLY TO SWALLOW THE ACCUMULATED BACKLOG ---
         # This acts exactly like running 'nc 127.0.0.1 15555' right as the VM finishes spawning!
-        if vm.console.sock:
-            vm.console.sock.close()
-            vm.console.sock = None
-        vm.console._connect_socket()
+        if not vm.console:
+            from qemu_mcp.qemu.console import QEMUConsole
+            vm.console = QEMUConsole(vm)  # Instantiates the console dynamically
+
+        # Explicitly connects the raw serial TCP socket on port 15555
+        assert vm.console._connect_socket() is True
+        assert vm.console.sock is not None
+
         # -------------------------------------------------------------------------
 
         # --- DYNAMIC POLLING LOOP WITH TIMEOUT ---

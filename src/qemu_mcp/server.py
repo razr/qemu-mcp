@@ -66,6 +66,29 @@ def get_qemu_status() -> dict:
     # Instantly hits loopback port 15556 via json-rpc execution packets
     return vm.status()
 
+@mcp.tool()
+def send_console_command(command: str, timeout: float = 1.0) -> str:
+    """
+    Sends an explicit text command down the runtime's interactive target shell interface
+    and harvests the returned string logs.
+    """
+    global active_runtime
+
+    # Stateless Self-Healing: Reconstruct the runtime driver context if FastMCP wiped it out
+    if not active_runtime:
+        status_info = vm.status()
+        if status_info.get("status") == "RUNNING":
+            from .runtimes.loader import get_runtime_class
+            runtime_cls = get_runtime_class("vxworks")
+            if runtime_cls:
+                active_runtime = runtime_cls(vm)
+
+    # If it's still missing, it means the hypervisor process is completely stopped
+    if not active_runtime:
+        return "Error: No target runtime environment is currently active. Call start_qemu first."
+
+    # Execute your generic passthrough method through your polymorphic driver layer
+    return active_runtime.run_shell_command(command=command, timeout=timeout)
 
 # =====================================================================
 # UNIFIED RUNTIME APPLICATION TOOLS (Polymorphic 1:1 Layer)

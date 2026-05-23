@@ -1,6 +1,8 @@
 # Add this to tests/test_loader.py
 import inspect
 
+from qemu_mcp.runtimes.loader import get_runtime_class
+
 def test_dynamic_os_parameter_loading(os_name):
     """
     Loads any target OS class by its parameter token name and dumps its

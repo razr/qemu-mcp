@@ -17,7 +17,7 @@ dev = [
 ]
 
 [project.scripts]
-qemu-mcp = "qemu_mcp.main:main"
+qemu-mcp-server = "qemu_mcp.server:mcp.run"
 
 [build-system]
 requires = ["setuptools>=61"]

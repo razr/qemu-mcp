@@ -24,7 +24,7 @@ class VxWorksRuntime(TargetRuntime):
         """Switches the interactive terminal state between C and cmd interpreters."""
         if not self.vm or not self.vm.console:
             raise RuntimeError("Cannot alter shell context: Hypervisor console channel is offline.")
-            
+
         if self.shell_mode == target_mode:
             return
 
@@ -40,7 +40,7 @@ class VxWorksRuntime(TargetRuntime):
     def upload(self, host_path: str, remote_path: str) -> bool:
         """
         Transfers binaries or execution assets into VxWorks target storage.
-        Note: For standard setups, this moves files into an active host-share 
+        Note: For standard setups, this moves files into an active host-share
         directory mapping to an NFS mount point inside the guest.
         """
         # Placeholder for automated host filesystem staging logic
@@ -53,31 +53,31 @@ class VxWorksRuntime(TargetRuntime):
         Returns the unique hex identifier string (RTP ID).
         """
         self._ensure_shell_mode("C")
-        
+
         # 1. Format parameter collections
         formatted_args = ", ".join(f'"{a}"' for a in args) if args else "0"
-        
+
         # 2. Compile standard rtpSp command string
         # Default stack sizes are elevated to handle Python runtimes securely
         stack_size = options.get("stack_size", 65536)
         priority = options.get("priority", 100)
-        
+
         exec_cmd = f"rtpSp \"{path}\", {formatted_args}, {priority}, {stack_size}\n"
-        
+
         # Clear out any previous unread stdout line elements from the pipe
         _ = self.vm.console.read_available()
-        
+
         # 3. Transmit command down the wire
         self.vm.console.send(exec_cmd)
         time.sleep(0.2)  # Give VxWorks a small window to output the boot token
-        
+
         # 4. Parse the terminal trace to isolate the generated RTP pointer token
         console_dump = self.vm.console.read_available()
         # Look for typical boot messages: "Launch process '...' (RTP Id: 0x2010ab30)"
         match = re.search(r"RTP Id:\s*(0x[0-9a-fA-F]+)", console_dump)
         if match:
             return match.group(1)
-            
+
         # Fallback to general lookup if direct regex fails
         return "0xUnknownRTP"
 
@@ -91,7 +91,7 @@ class VxWorksRuntime(TargetRuntime):
         """Queries localized telemetry and execution parameters for a specific RTP handle."""
         self._ensure_shell_mode("C")
         status_cmd = f"rtpShow {target_id}\n"
-        
+
         _ = self.vm.console.read_available()
         self.vm.console.send(status_cmd)
         time.sleep(0.1)
@@ -115,13 +115,13 @@ class VxWorksRuntime(TargetRuntime):
     def fetch_logs(self, target_id: str, tail_lines: int = 100) -> str:
         """
         Retrieves context-isolated stdout/stderr outputs for an application handle.
-        Note: If ioTaskStdSet was used to capture process output into a file, 
+        Note: If ioTaskStdSet was used to capture process output into a file,
         this command reads that file path directly via the shell.
         """
         self._ensure_shell_mode("cmd")
         # Assuming typical setup routes logs to a unique storage descriptor path:
         read_cmd = f"tail -n {tail_lines} /tffs0/logs/{target_id}.log\n"
-        
+
         _ = self.vm.console.read_available()
         self.vm.console.send(read_cmd)
         time.sleep(0.1)
@@ -133,14 +133,14 @@ class VxWorksRuntime(TargetRuntime):
             raise ValueError(f"Unsupported diagnostic mode element: {mode}")
 
         self._ensure_shell_mode("C")
-        
+
         # Map parameters to exact core VxWorks inspection commands
         cmd_map = {"tasks": "taskShow\n", "memory": "memShow\n", "fds": "iosFdShow\n"}
         self.vm.console.send(cmd_map[mode])
         time.sleep(0.3)  # Large tables require extra buffer processing latencies
-        
+
         raw_table = self.vm.console.read_available()
-        
+
         # Returns the structural format to the upstream tool context
         return {
             "mode": mode,
@@ -148,3 +148,22 @@ class VxWorksRuntime(TargetRuntime):
             "summary": f"Extracted system matrix data for subsystem [{mode}]."
         }
 
+    def run_shell_command(self, command: str, timeout: float = 1.0) -> str:
+        """
+        Generic passthrough shell command interface.
+        Delegates the complete exchange pattern straight down to the console transport layer.
+        """
+        # 1. Stateless Self-Healing Check: Reconnect console subsystem if dropped
+        console_subsystem = self.vm.console
+        if not console_subsystem:
+            from qemu_mcp.qemu.console import QEMUConsole
+            self.vm.console = QEMUConsole(self.vm)
+            console_subsystem = self.vm.console
+
+        try:
+            # 2. Leverage your unified console transport method directly!
+            # It cleanly handles connection, buffer flushing, sending, and delayed reading
+            return console_subsystem.exchange_text(text_payload=command, delay=timeout)
+
+        except Exception as e:
+            return f"Exception encountered during console communication loop: {str(e)}"

@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 class TargetRuntime(ABC):
     """
     Strict 1:1 Abstract Base Interface for QEMU-MCP Software Runtimes.
-    All OS-specific concrete subclasses (VxWorks, Zephyr) must implement 
+    All OS-specific concrete subclasses (VxWorks, Zephyr) must implement
     every method declared here with matching signatures.
     """
 
@@ -14,10 +14,19 @@ class TargetRuntime(ABC):
 
     def __init__(self, vm_backend):
         """
-        Initializes the runtime with a generic reference handle to the 
+        Initializes the runtime with a generic reference handle to the
         underlying hypervisor wrapper (QEMUVirtualMachine).
         """
         self.vm = vm_backend
+
+    @abstractmethod
+    def run_shell_command(self, command: str, timeout: float = 1.0) -> str:
+        """
+        Abstract transport contract interface.
+        Sends an explicit string command down the target interactive text shell
+        and returns the compiled terminal log outputs.
+        """
+        pass
 
     @abstractmethod
     def upload(self, host_path: str, remote_path: str) -> bool:
