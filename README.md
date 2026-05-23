@@ -1,42 +1,49 @@
 # QEMU MCP Server
 
-An MCP (Model Context Protocol) server that provides Large Language Models with the ability to manage, orchestrate, and interact with **QEMU** virtual machines.
+An MCP (Model Context Protocol) server that provides Large Language Models with the ability to manage, orchestrate, and interact with hardware-accelerated **QEMU** virtual machines running embedded real-time operating systems (VxWorks/Zephyr).
 
 ## Features
 
-- **Lifecycle Management**: Start, stop, and monitor QEMU processes using the `qemu.machine` library.
-- **QMP Integration**: Low-level communication with VMs via the QEMU Machine Protocol (`qemu.qmp`).
-- **Multi-Arch Support**: Pre-installed binaries for `x86_64` and `ARM` architectures.
-- **Dockerized Environment**: Encapsulates all complex system dependencies, ensuring the Python management tools match the installed QEMU binary versions.
+- **Automated Profile Discovery**: Embedded ELF header detection via `pyelftools` to match kernels to target hardware configurations.
+- **Hardware Acceleration**: High-speed execution using host KVM paths pass-through securely.
+- **Headless TCP Console Automation**: Non-blocking serial character interaction over isolated local sockets (`127.0.0.1:15555`).
+- **Dynamic Plugin Loader**: Decoupled, registration-free discovery loop for runtime classes based on target profile names.
+- **Containerized Parity**: Docker build workflow that automatically pulls the official matching `qemu` package repository tooling from GitLab.
 
 ## Prerequisites
 
-- **Docker** installed and running.
+- **Docker** installed and running on a Linux host (with `/dev/kvm` accessible).
 - An MCP-compatible client (e.g., [Claude Desktop](https://claude.ai)).
+- A compiled 64-bit target kernel image (e.g., VxWorks `itl_generic`).
 
 ## Installation & Setup
 
 ### 1. Build the Docker Image
-The build process automatically synchronizes the `qemu.machine` Python tooling from the official QEMU source to match the system's binary version.
+
+The build loop synchronizes the core python automation layers from the upstream QEMU source to match the system binary version.
 
 ```bash
 docker build -t qemu-mcp-server .
 ```
 
 ### 2. Configure Claude Desktop
-Add the server to your `claude_desktop_config.json`. 
 
-*Note: We use `-i` (interactive) to allow the MCP protocol to communicate over `stdio` inside the container.*
+Add the execution block to your `~/.config/Claude/claude_desktop_config.json` file. 
+
+*Note: We mount your host kernels folder into the container as read-only and explicitly share the hardware virtualization device accelerator layout.*
 
 ```json
 {
   "mcpServers": {
-    "qemu-manager": {
+    "qemu-vxworks-orchestrator": {
       "command": "docker",
       "args": [
-        "run",
-        "-i",
-        "--rm",
+        "run", "-i", "--rm",
+        "--device=/dev/kvm",
+        "-p", "15555:15555",
+        "-p", "1534:1534",
+        "-p", "2345:2345",
+        "-v", "/home/akholodn/Downloads:/kernels:ro",
         "qemu-mcp-server"
       ]
     }
@@ -46,24 +53,53 @@ Add the server to your `claude_desktop_config.json`.
 
 ## Technical Details
 
-- **Base Image**: `python:3.12-slim` (Debian Bookworm).
-- **Core Dependencies**: 
-    - `FastMCP`: Framework for MCP server implementation.
-    - `qemu.machine`: Internal QEMU library for process control.
-    - `qemu.qmp`: Official library for QEMU Machine Protocol communication.
-    - `psutil` & `pyelftools`: For system monitoring and binary analysis.
+- **Base Layout**: Modern Python `src/` directory package packaging conventions.
+- **Core Dependencies**:
+    - `FastMCP`: High-utility framework for standard static tools generation mapping.
+    - `qemu.machine`: Upstream package handling monitor sockets and JSON-RPC handshakes natively.
+    - `pyelftools`: For raw binary analysis and architecture detection.
+    - `psutil`: Local process tree status resource cleaning tracking.
 
-## Development
+## Development & Testing
 
-If you add new Python dependencies, update the `RUN pip install` section in the `Dockerfile`. To test the server locally through Docker:
+### local Virtual Environment Installation
+
+Initialize dependencies in development mode using your workspace project file definitions:
 
 ```bash
-docker run -it --rm qemu-mcp-server
+# Install package along with testing dependency groups
+pip install -e ".[dev]"
+
+# Build your distribution wheel package natively
+python3 -m build
+```
+
+### Run the Un-Mocked Test Suite
+
+You can execute targeted integration checks directly against a live running hypervisor process inside your shell environment:
+
+```bash
+# Terminal 1: Run your precise QEMU command parameters sequence
+qemu-system-x86_64 -m 1G -nographic -kernel /path/to/vxWorks -append "bootline:fs(0,0)..." -cpu Nehalem -smp 4 -net nic -net user,hostfwd=tcp::1534-:1534,hostfwd=tcp::2345-:2345 -chardev socket,id=console,host=127.0.0.1,port=15555,server=on,wait=off -serial chardev:console -enable-kvm
+
+# Terminal 2: Run parameter-driven validation loops across our sockets
+pytest tests/test_console.py -s -v
+pytest tests/test_console_interaction.py -s -v --kernel-path=/path/to/vxWorks
+pytest tests/test_vm.py -s -v --kernel-path=/path/to/vxWorks
 ```
 
 ### Project Structure
 
-- `Dockerfile`: Orchestrates the installation of QEMU binaries and sparse-checkouts the Python in-tree modules.
-- `setup.py`: Defines the `qemu-mcp` entry point for the CLI.
-- `qemu_mcp/`: Contains the MCP tools and resource definitions.
+```text
+├── pyproject.toml         # Unified dependency declarations and pytest configurations
+├── ARCHITECTURE.md        # Technical data-flow blueprints mapping
+├── Dockerfile             # Container orchestration using non-isolated pip compilers
+├── src/
+│   └── qemu_mcp/
+│       ├── main.py        # Python script console entry point execution launcher
+│       ├── server.py      # FastMCP tools registrations registry
+│       ├── qemu/          # VM instance handling and profile dictionaries configurations
+│       └── runtimes/      # Dynamic loader loops and OS table text regex tools parsers
+└── tests/                 # 100% Un-mocked, real-kernel interaction integration test cases
+```
 
