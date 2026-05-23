@@ -1,66 +1,118 @@
 import os
+from typing import Optional
 from fastmcp import FastMCP
-from .manager import QEMUManager
 
-# Initialize FastMCP and the Business Logic Manager
-mcp = FastMCP("QEMU-Manager")
-manager = QEMUManager()
+from .qemu.vm import QEMUVirtualMachine
+from .runtimes.base import TargetRuntime
+from .runtimes.loader import detect_runtime
+
+# 1. Initialize FastMCP with a fixed, predictable capability matrix
+mcp = FastMCP("QEMU-MCP-Manager")
+
+# Global hypervisor and active runtime infrastructure references
+vm = QEMUVirtualMachine()
+active_runtime: Optional[TargetRuntime] = None
+
+
+# =====================================================================
+# HYPERVISOR MANAGEMENT TOOLS (QEMU Backend Layer)
+# =====================================================================
 
 @mcp.tool()
-def start_qemu(kernel_path: str, extra_args: str = None) -> str:
+def start_qemu(kernel_path: str, profile: str = "vxworks_x86_64_default", extra_args: str = None) -> str:
     """
-    Starts a QEMU instance. Automatically detects architecture from the kernel file.
-    :param kernel_path: Absolute path to the vxWorks or RTOS kernel binary.
-    :param extra_args: Optional additional QEMU command line arguments.
+    Boots the QEMU engine utilizing an explicit or default parameter configuration profile.
+    
+    :param kernel_path: Path to the target execution system image.
+    :param profile: Configuration profile selection. Defaults to 'vxworks_x86_64_default'.
+    :param extra_args: Additional space-separated hardware arguments to append to the command.
     """
-    return manager.start(kernel_path, extra_args)
+    global active_runtime
+    
+    # 1. Forward both path and custom/default profile identifiers down to the hypervisor driver
+    vm.start(kernel_path, profile_name=profile, extra_args=extra_args)
+    active_runtime = None
+
+    # 2. Structural Runtime Auto-Detection phase
+    runtime_cls = detect_runtime(kernel_path)
+    if runtime_cls:
+        active_runtime = runtime_cls()
+        return f"QEMU initialized with profile [{profile}]. Active Driver: {runtime_cls.__name__}"
+    
+    return f"QEMU initialized with profile [{profile}]. Warning: Target OS runtime driver missing."
 
 @mcp.tool()
 def stop_qemu() -> str:
-    """Safely shuts down the running QEMU instance and cleans up sockets."""
-    return manager.stop()
+    """Terminates the QEMU instance and releases runtime resources."""
+    global active_runtime
+    vm.stop()
+    active_runtime = None
+    return "Target environment completely stopped."
+
+
+# =====================================================================
+# UNIFIED RUNTIME APPLICATION TOOLS (Polymorphic 1:1 Layer)
+# =====================================================================
 
 @mcp.tool()
-def get_status() -> str:
-    """Returns the current execution status of the VM via QMP."""
-    return manager.status()
+def app_upload(host_path: str, remote_path: str) -> str:
+    """Uploads binaries or execution assets directly into the target environment."""
+    if not active_runtime:
+        return "Error: No target runtime environment is currently active."
+    
+    success = active_runtime.upload(host_path, remote_path)
+    return "Upload successful." if success else "Failed to upload file to target."
+
 
 @mcp.tool()
-def get_console_output(lines: int = 50):
-    """
-    Reads the last N lines of the QEMU serial console log.
-    Use this to check the vxWorks boot sequence or debug crashes.
-    """
-    log_path = "/app/qemu_vms.log"
-    if not os.path.exists(log_path):
-        return "No log file found. VM might not be running or log is empty."
+def app_exec(path: str, args: list[str] = None, options: dict = None) -> str:
+    """Spawns an isolated execution unit (VxWorks RTP / Zephyr Thread) on the target."""
+    if not active_runtime:
+        return "Error: No target runtime environment is currently active."
+    
+    args = args or []
+    options = options or {}
+    
+    # Explicitly returns the uniform string TargetID (e.g., RTP ID or TCB Ptr)
+    target_id = active_runtime.exec(path, args, options)
+    return f"Execution initiated successfully. Allocated Target ID: {target_id}"
 
-    with open(log_path, "r") as f:
-        content = f.readlines()
-        return "".join(content[-lines:])
-
-@mcp.tool()
-def rtp_exec(rtp_name: str) -> str:
-    """
-    Executes an RTP. Automatically switches to cmd mode if needed.
-    """
-    # 1. Ensure we are in the correct shell for 'rtp exec'
-    manager.ensure_cmd_mode()
-
-    # 2. Execute the command
-    command = f"rtp exec {rtp_name}\n"
-    if manager.send_input(command):
-        return f"Ensured cmd mode and executed: {command.strip()}"
-    return "Error: Could not send command to QEMU"
 
 @mcp.tool()
-def toggle_shell() -> str:
-    """Toggles between C and cmd shell."""
-    if manager.shell_mode == "C":
-        manager.send_input("cmd\n")
-        manager.shell_mode = "cmd"
-    else:
-        manager.send_input("C")
-        manager.shell_mode = "C"
-    return f"Shell toggled to: {manager.shell_mode}"
+def app_kill(target_id: str) -> str:
+    """Forces termination of an active application handle on the target OS."""
+    if not active_runtime:
+        return "Error: No target runtime environment is currently active."
+    
+    success = active_runtime.kill(target_id)
+    return f"Termination signal sent to target [{target_id}]." if success else "Failed to kill target."
+
+
+@mcp.tool()
+def app_status(target_id: str) -> dict:
+    """Queries the localized scheduling telemetry and execution states of an application."""
+    if not active_runtime:
+        return {"error": "No active target runtime."}
+    
+    # Returns the exact StatusJSON layout matching your schema specification
+    return active_runtime.status(target_id)
+
+
+@mcp.tool()
+def target_inspect(mode: str) -> dict:
+    """Performs a global system diagnostic snapshot (tasks, memory, fds)."""
+    if not active_runtime:
+        return {"error": "No active target runtime."}
+    
+    # Returns the exact StructuredJSON schema
+    return active_runtime.inspect(mode)
+
+
+@mcp.tool()
+def app_fetch_logs(target_id: str, tail_lines: int = 100) -> str:
+    """Retrieves context-isolated output buffers for an explicit application handle."""
+    if not active_runtime:
+        return "Error: No active target runtime."
+    
+    return active_runtime.fetch_logs(target_id, tail_lines)
 

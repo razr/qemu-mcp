@@ -1,16 +1,33 @@
 [project]
 name = "qemu-mcp"
 version = "0.1.0"
-description = "Universal QEMU Lifecycle MCP with Auto-Detection"
+description = "Universal QEMU Lifecycle MCP with Runtime Plugins"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
+
 dependencies = [
-    "fastmcp",     # MCP Framework
-    "qemu",        # Official QEMU Python SDK (for QEMUMachine)
-    "pyelftools",  # Industrial ELF analysis
-    "psutil"       # Safe process management
+    "fastmcp>=0.4.1",
+    "qemu-qmp>=0.0.6",  # FIXED: Point to the actual framework layout on PyPI
+    "pyelftools>=0.31"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
 ]
 
 [project.scripts]
 qemu-mcp = "qemu_mcp.main:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
 

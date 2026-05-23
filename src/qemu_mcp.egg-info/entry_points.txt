@@ -1,2 +1,0 @@
-[console_scripts]
-qemu-mcp = qemu_mcp.main:main

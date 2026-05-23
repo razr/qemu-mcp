@@ -1,3 +1,11 @@
 .venv/
 .env
 __pycache__/
+*/*.egg-info/
+dist/
+build/
+*.pyc
+
+# Local runtime testing files and test framework caches
+.pytest_cache/
+*.log

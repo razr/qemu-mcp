@@ -1,99 +1,94 @@
 import os
+import logging
+from typing import Dict, Any, List, Optional
 from qemu.machine import QEMUMachine
 from .detector import ArchDetector
 
-class QEMUManager:
-    def __init__(self):
-        self.vm = None
-        self.info = None
-        self.shell_mode = "C"  # Default VxWorks state
+logger = logging.getLogger("qemu_mcp.qemu")
 
-    def start(self, kernel_path: str, extra_args: str = None):
-        """Detects arch and launches VxWorks via QEMUMachine."""
+class QEMUManager:
+    """
+    Pure QEMU Backend Layer.
+    Agnostic to Guest OS internals (VxWorks/Zephyr). Focuses strictly on
+    VM hardware, process lifecycle, and byte piping.
+    """
+    def __init__(self):
+        self.vm: Optional[QEMUMachine] = None
+        self.info: Optional[Dict[str, Any]] = None
+        self.log_path = "/app/qemu_vms.log"
+
+    def start(self, kernel_path: str, guest_append_args: Optional[str] = None, platform_qemu_args: Optional[List[str]] = None) -> str:
+        """Launches the hypervisor instance based on automatically detected binary architecture."""
         if self.vm and self.vm.is_running():
-            return "Error: QEMU is already running."
+            return "Error: QEMU instance is already active."
 
         try:
-            # 1. Use pyelftools-based detector
+            # 1. Detect target binary architecture (ELF parsing)
             self.info = ArchDetector.get_info(kernel_path)
             qemu_bin = self.info["qemu_bin"]
 
-            # 2. Initialize QEMUMachine
-            # It automatically manages QMP sockets and process cleanup
+            # 2. Initialize QEMUMachine base
             self.vm = QEMUMachine(qemu_bin)
 
-            # 3. Build the VxWorks-specific bootline
-            # Standard for SR0120/26.03 (FTP/Network enabled)
-            bootline = (
-                "bootline: gei(0,0)host:vxWorks h=10.0.2.2 e=10.0.2.15 "
-                "u=target pw=vxTarget o=gei0"
-            )
-
-            self.log_path = "/app/qemu_vms.log"
-
-            # 4. Configure Arguments
+            # 3. Formulate baseline hardware-level definitions
             args = [
                 "-m", "1G",
                 "-kernel", kernel_path,
                 "-nographic",
-                "-serial", f"file:{self.log_path}",
-                "-append", bootline,
-                "-net", "nic,model=e1000" if self.info["arch"] == "x86_64" else "nic",
-                "-net", "user,hostfwd=tcp::2121-:21,hostfwd=tcp::1534-:1534"
+                "-serial", f"file:{self.log_path}",  # Note: Consider socket pairing for live reading
             ]
-            
-            if extra_args:
-                args.extend(extra_args.split())
+
+            # 4. Inject OS-specific hypervisor configurations passed down from the runtime layer
+            if platform_qemu_args:
+                args.extend(platform_qemu_args)
+
+            # 5. Inject guest boot arguments into the system append block
+            if guest_append_args:
+                args.extend(["-append", guest_append_args])
 
             self.vm.add_args(*args)
 
-            # IMPORTANT: Tell QEMUMachine to capture/allow stdin
-            # This ensures the underlying subprocess has a writable pipe
+            # Keep stdin open for raw runtime command streaming
             self.vm._console_set = True
 
-
-            # 5. Launch
+            # 6. Fire up hypervisor
             self.vm.launch()
-            return f"Started {qemu_bin} for {self.info['arch']}. QMP active."
+            return f"Started {qemu_bin} for {self.info['arch']}. Hardware layer up."
 
         except Exception as e:
             self.vm = None
+            logger.error(f"Hypervisor boot failure: {e}")
             return f"Launch failed: {str(e)}"
 
-    def stop(self):
-        """Safely shuts down the VM and cleans up resources."""
+    def stop(self) -> str:
+        """Terminates the QEMU target machine instantly via QMP/Process signal."""
         if not self.vm or not self.vm.is_running():
             return "QEMU is not running."
-        
+
         self.vm.shutdown()
         self.vm = None
         return "QEMU stopped and cleaned up."
 
-    def status(self):
-        """Queries QMP for the real-time CPU status."""
+    def status(self) -> Dict[str, Any]:
+        """Queries hardware-level status via QMP."""
         if not self.vm or not self.vm.is_running():
-            return "Status: STOPPED"
+            return {"status": "STOPPED", "arch": None}
 
         try:
             res = self.vm.qmp("query-status")
             status = res.get("return", {}).get("status", "unknown")
-            return f"Status: {status.upper()} (Arch: {self.info['arch']})"
+            return {"status": status.upper(), "arch": self.info["arch"]}
         except Exception as e:
-            return f"Status: RUNNING (QMP Error: {str(e)})"
+            return {"status": "RUNNING_QMP_ERROR", "arch": self.info["arch"], "error": str(e)}
 
-    def send_input(self, data: str):
-        """Sends raw string input to the QEMU serial console via QEMUMachine process."""
-        # QEMUMachine stores the subprocess in self.vm._process
+    def send_raw_bytes(self, data: bytes) -> bool:
+        """Pushes raw bytes into the serial execution line of the guest processor."""
         if self.vm and self.vm.is_running() and self.vm._process.stdin:
-            self.vm._process.stdin.write(data.encode())
-            self.vm._process.stdin.flush()
-            return True
+            try:
+                self.vm._process.stdin.write(data)
+                self.vm._process.stdin.flush()
+                return True
+            except IOError:
+                return False
         return False
 
-    def ensure_cmd_mode(self):
-        """Switches to cmd mode if currently in C mode."""
-        if self.shell_mode == "C":
-            self.send_input("cmd\n")
-            self.shell_mode = "cmd"
-            import time
-            time.sleep(0.1) # Small delay for shell transition
