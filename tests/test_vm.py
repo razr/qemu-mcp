@@ -27,7 +27,7 @@ def test_vm_backend_lifecycle_and_qmp(kernel_path):
         print("[STAGE 2] Querying hardware telemetry status over raw QMP socket...")
         vm_status = vm.status()
         print(f" -> Live Status Response Matrix: {vm_status}")
-        
+
         assert vm_status["status"] == "RUNNING"
         assert vm_status["arch"] == "x86_64"
 

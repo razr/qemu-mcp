@@ -55,7 +55,7 @@ class QEMUVirtualMachine:
                 # Serial Console Interface (Port 15555)
                 "-chardev", "socket,id=console,host=127.0.0.1,port=15555,server=on,wait=off",
                 "-serial", "chardev:console",
-                
+
                 # QMP Monitor Interface (Port 15556)
                 "-chardev", "socket,id=monitor,host=127.0.0.1,port=15556,server=on,wait=off",
                 "-mon", "chardev=monitor,mode=control"
@@ -80,7 +80,7 @@ class QEMUVirtualMachine:
             # 4. Instantiate and immediately connect the non-blocking interfaces
             self.console = QEMUConsole(self)
             self.console._connect_socket()
-            
+
             # Connect to our freshly exposed QMP server socket loop
             self._connect_qmp()
 
@@ -96,7 +96,7 @@ class QEMUVirtualMachine:
         try:
             self.qmp_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.qmp_sock.settimeout(1.0)
-            
+
             # Poll loop to wait for QEMU's server port to spin up
             for _ in range(5):
                 try:
@@ -107,14 +107,14 @@ class QEMUVirtualMachine:
 
             # A. Read the mandatory initial greeting capabilities negotiation banner from QEMU
             _ = self.qmp_sock.recv(4096)
-            
+
             # B. Execute the mandatory QMP capabilities handshake command
             negotiate_cmd = json.dumps({"execute": "qmp_capabilities"}) + "\n"
             self.qmp_sock.sendall(negotiate_cmd.encode("utf-8"))
-            
+
             # C. Read the execution acknowledgment response
             _ = self.qmp_sock.recv(4096)
-            
+
             # Set to standard non-blocking/low-timeout mode for runtime status polling
             self.qmp_sock.settimeout(0.1)
         except Exception as e:
@@ -152,10 +152,10 @@ class QEMUVirtualMachine:
         try:
             status_cmd = json.dumps({"execute": "query-status"}) + "\n"
             self.qmp_sock.sendall(status_cmd.encode("utf-8"))
-            
+
             response_bytes = self.qmp_sock.recv(4096)
             res = json.loads(response_bytes.decode("utf-8"))
-            
+
             qmp_status = res.get("return", {}).get("status", "unknown")
             return {
                 "status": qmp_status.upper(),

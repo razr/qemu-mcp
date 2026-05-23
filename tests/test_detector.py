@@ -3,12 +3,12 @@ import inspect
 
 def test_dynamic_os_parameter_loading(os_name):
     """
-    Loads any target OS class by its parameter token name and dumps its 
+    Loads any target OS class by its parameter token name and dumps its
     underlying methods to prove it successfully resolved the true runtime asset.
     """
     # 1. Resolve the runtime class using your dynamic property comparison loop
     runtime_cls = get_runtime_class(os_name)
-    
+
     # 2. Hard validation guard
     if runtime_cls is None:
         pytest.fail(f"Execution Error: No registered runtime found matching OS token: '{os_name}'")

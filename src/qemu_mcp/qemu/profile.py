@@ -8,7 +8,7 @@ PROFILES: Dict[str, Dict[str, Any]] = {
         "qemu_bin": "qemu-system-x86_64",
         "platform_args": ["-cpu", "Nehalem", "-smp", "4", "-enable-kvm"],
         "network_args": [
-            "-net", "nic", 
+            "-net", "nic",
             "-net", "user,hostfwd=tcp::1534-:1534,hostfwd=tcp::2345-:2345"
         ],
         "append_args": "bootline:fs(0,0)host:vxWorks h=10.0.2.2 e=10.0.2.15 u=target pw=vxTarget o=gei0"

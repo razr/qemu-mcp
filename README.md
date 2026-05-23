@@ -29,7 +29,7 @@ docker build -t qemu-mcp-server .
 
 ### 2. Configure Claude Desktop
 
-Add the execution block to your `~/.config/Claude/claude_desktop_config.json` file. 
+Add the execution block to your `~/.config/Claude/claude_desktop_config.json` file.
 
 *Note: We mount your host kernels folder into the container as read-only and explicitly share the hardware virtualization device accelerator layout.*
 

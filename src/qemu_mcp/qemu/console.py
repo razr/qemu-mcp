@@ -22,11 +22,11 @@ class QEMUConsole:
         try:
             # Create a standard TCP Socket
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            
+
             # --- FIX: USE BLOCKING CONNECT TO ENSURE SOCKET IS IMMEDIATELY PRIMED ---
             # This replicates the exact behavior of manual 'nc' execution
             self.sock.settimeout(1.0)
-            
+
             for attempt in range(5):
                 try:
                     self.sock.connect(("127.0.0.1", 15555))
@@ -36,7 +36,7 @@ class QEMUConsole:
                     return True
                 except (ConnectionRefusedError, socket.timeout):
                     time.sleep(0.2)
-                    
+
             logger.error("Console socket connection timed out after 5 attempts.")
             self.sock = None
             return False

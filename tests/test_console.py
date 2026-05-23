@@ -11,7 +11,7 @@ def test_live_qemu_serial_interaction():
     """
     # 1. Instantiate the minimal wrapper object required by the new console logic
     mock_vm = MagicMock()
-    
+
     # 2. Stub the raw process wrapper handle to simulate a healthy running backend
     mock_vm._process = MagicMock()
     mock_vm._process.poll.return_value = None  # None indicates the process is still running
@@ -31,7 +31,7 @@ def test_live_qemu_serial_interaction():
 
     prompt_check = console.read_available()
     print(f" -> Shell Response Fragment: {repr(prompt_check)}")
-    
+
     # Assert that the real target returned the true VxWorks prompt
     assert "->" in prompt_check, f"Expected VxWorks prompt '->', got: {repr(prompt_check)}"
     print("[SUCCESS] Successfully read real serial bytes from the running QEMU instance.")

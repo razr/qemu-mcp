@@ -8,13 +8,13 @@ from qemu_mcp.runtimes.vxworks.runtime import VxWorksRuntime
 
 def test_dynamic_os_parameter_loading(os_name):
     """
-    Loads any target OS class by its parameter token name and dumps its 
+    Loads any target OS class by its parameter token name and dumps its
     underlying methods to prove it successfully resolved the true runtime asset.
     Fails hard with an execution error if the requested OS is not found.
     """
     # 1. Resolve the runtime class dynamically from the real discovered plugins
     runtime_cls = get_runtime_class(os_name)
-    
+
     # 2. Hard validation guard: If the plugin is missing, fail the test immediately
     if runtime_cls is None:
         pytest.fail(f"Execution Error: No registered runtime found matching OS token: '{os_name}'")
