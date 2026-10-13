@@ -69,6 +69,35 @@ PROFILES: Dict[str, Dict[str, Any]] = {
         "kernel_shell_prompt": "->",
         "command_shell_prompt": "[vxWorks",
     },
+
+    # KVM-accelerated variant of the lyrical disk profile. ~faster for CPU-heavy
+    # workloads (rclrs/DDS init). Requires /dev/kvm rw + membership in the kvm group.
+    # Uses -cpu host (KVM passthrough) + -smp 4 (SDK default). Falls back is manual:
+    # if KVM is unavailable, use vxworks_lyrical_disk (TCG).
+    "vxworks_lyrical_disk_kvm": {
+        "os": "vxworks",
+        "arch": "x86_64",
+        "qemu_bin": "qemu-system-x86_64",
+        "memory": "2G",
+        "platform_args": ["-machine", "q35", "-cpu", "host", "-smp", "4", "-enable-kvm"],
+        "network_args": [
+            "-net", "nic",
+            "-net", "tap,ifname=tap0,script=no,downscript=no",
+        ],
+        "drive_args": [
+            "-device", "ich9-ahci,id=ahci",
+            "-drive", "file={drive_image},if=none,id=ros2disk,format=raw",
+            "-device", "ide-hd,drive=ros2disk,bus=ahci.0",
+        ],
+        "append_args": (
+            "bootline:fs(0,0)host:/vxWorks "
+            "h=192.168.200.254 e=192.168.200.1 g=192.168.200.254 "
+            "u=ftp pw=ftp123 o=gei0 s=/ata0/vxscript"
+        ),
+        "boot_ready_markers": ["Done executing startup script"],
+        "kernel_shell_prompt": "->",
+        "command_shell_prompt": "[vxWorks",
+    },
 }
 
 
