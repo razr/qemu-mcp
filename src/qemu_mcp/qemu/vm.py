@@ -27,7 +27,8 @@ class QEMUVirtualMachine:
         self.args: List[str] = []
         self.binary: str = ""
 
-    def start(self, kernel_path: str, profile_name: str = "vxworks_x86_64_default", extra_args: Optional[str] = None) -> bool:
+    def start(self, kernel_path: str, profile_name: str = "vxworks_x86_64_default",
+              extra_args: Optional[str] = None, drive_image: Optional[str] = None) -> bool:
         # Check if QEMU is already running in the background via port/QMP probe before starting a new one
         if self.monitor.connect(retries=1):
             logger.info("Target QEMU instance is already active in the background. Re-attaching.")
@@ -41,16 +42,20 @@ class QEMUVirtualMachine:
             args: List[str] = [
                 qemu_bin,
                 "-kernel", kernel_path,
-                "-m", "1G",
-                "-display", "none"
+                "-m", self.profile.memory,
+                "-display", "none",
             ]
 
             boot_append = self.profile.append_args()
             if boot_append:
-                args.extend(["-append", f'"{boot_append}"'])
+                # NOTE: args are passed as a list to Popen (no shell), so the
+                # bootline must NOT be wrapped in literal quotes — QEMU receives
+                # it as a single argv element already.
+                args.extend(["-append", boot_append])
 
             args.extend(self.profile.platform_args())
             args.extend(self.profile.network_args())
+            args.extend(self.profile.drive_args(drive_image))
 
             args.extend([
                 # Adding ,server=on,wait=off tells QEMU to wait for connections without dying on disconnect
@@ -67,12 +72,13 @@ class QEMUVirtualMachine:
             self.args = args[1:]
             self.binary = qemu_bin
 
+            log_file = open(self.log_path, "w", encoding="utf-8")
             # Launch completely detached from Python's process tree lifecycle hooks
             self._process = subprocess.Popen(
                 args,
                 stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=log_file,
                 start_new_session=True
             )
 
@@ -82,12 +88,23 @@ class QEMUVirtualMachine:
 
             time.sleep(0.5)
             self.monitor.connect()
+
+            # Instantiate the console transport now that the serial socket is up,
+            # so boot-ready detection and shell automation can use it.
+            self.console = QEMUConsole(self)
             return True
 
         except Exception as e:
             self.stop()
             logger.error(f"Hypervisor startup exception encountered: {e}")
             raise e
+
+    def wait_for_boot(self, timeout: float = 120.0) -> bool:
+        """Block until the OS prints a boot-ready marker (from the active profile)."""
+        if not self.console:
+            self.console = QEMUConsole(self)
+        markers = self.profile.boot_ready_markers() if self.profile else ["->"]
+        return self.console.wait_for_boot(markers, timeout=timeout)
 
     def stop(self, binary_name: Optional[str] = None) -> bool:
         """Safely shuts down the VM instance and releases process tree contexts."""

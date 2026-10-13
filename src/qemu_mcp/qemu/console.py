@@ -102,3 +102,53 @@ class QEMUConsole:
         # 4. Return whatever raw data came back over the wire
         return self.read_available()
 
+    def wait_until(self, markers, timeout: float = 60.0, poll: float = 0.3):
+        """Accumulate console output until any marker substring appears or timeout.
+
+        markers: a string or list of substrings to look for.
+        Returns (matched_marker_or_None, accumulated_text).
+        This is the expect-style primitive that replaces blind sleeps.
+        """
+        if isinstance(markers, str):
+            markers = [markers]
+        if not self.sock and not self._connect_socket():
+            return None, ""
+
+        acc = []
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            chunk = self.read_available()
+            if chunk:
+                acc.append(chunk)
+                combined = "".join(acc)
+                for m in markers:
+                    if m in combined:
+                        return m, combined
+            else:
+                time.sleep(poll)
+        return None, "".join(acc)
+
+    def send_and_wait(self, command: str, markers, timeout: float = 30.0,
+                      settle: float = 0.3):
+        """Send a command, then wait for any of `markers`. Returns accumulated text.
+
+        Clears stale data first so the returned text is the response to THIS command.
+        """
+        if not self.sock and not self._connect_socket():
+            raise ConnectionError("Console transport interface is unreachable.")
+        self.read_available()  # flush stale
+        payload = command if command.endswith("\n") else command + "\n"
+        self.send(payload)
+        if settle:
+            time.sleep(settle)
+        _matched, text = self.wait_until(markers, timeout=timeout)
+        return text
+
+    def wait_for_boot(self, markers, timeout: float = 120.0):
+        """Wait for the OS to finish booting (any boot-ready marker seen).
+
+        Returns True if a marker appeared within timeout.
+        """
+        matched, _text = self.wait_until(markers, timeout=timeout)
+        return matched is not None
+

@@ -9,3 +9,4 @@ build/
 # Local runtime testing files and test framework caches
 .pytest_cache/
 *.log
+qemu_vms.log

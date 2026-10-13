@@ -24,31 +24,60 @@ active_runtime: Optional[TargetRuntime] = None
 # =====================================================================
 
 @mcp.tool()
-def start_qemu(kernel_path: str, profile: str = "vxworks_x86_64_default", extra_args: str = None) -> str:
+def start_qemu(kernel_path: str, profile: str = "vxworks_x86_64_default",
+               extra_args: str = None, drive_image: str = None,
+               wait_boot: bool = True, boot_timeout: float = 120.0) -> str:
     """
     Boots the QEMU engine utilizing an explicit or default parameter configuration profile.
+
+    For the lyrical ROS 2 disk image, use profile='vxworks_lyrical_disk' and pass
+    drive_image=/path/to/output/ros2.img. When wait_boot is True, blocks until the
+    target prints a boot-ready marker and the command shell is entered.
     """
     global active_runtime
 
     if profile not in PROFILES:
         return f"Error: Configuration profile '{profile}' is unrecognized."
 
-    boot_success = vm.start(kernel_path, profile_name=profile, extra_args=extra_args)
+    boot_success = vm.start(kernel_path, profile_name=profile,
+                            extra_args=extra_args, drive_image=drive_image)
     if not boot_success:
         return "Error: Hypervisor failed to boot or a target engine instance is already active."
 
+    # Remember the image so the runtime's upload() can mcopy into it.
+    vm.drive_image = drive_image
+
     active_runtime = None
-
-    # FIXED: Check the profile dictionary configuration metadata to find the matching 'os' token
-    os_name = PROFILES[profile]["os"]  # 'vxworks'
-
-    # 2. Structural Runtime Auto-Detection phase
-    runtime_cls = get_runtime_class(os_name)  # FIXED: Use your verified loader API method
+    os_name = PROFILES[profile]["os"]
+    runtime_cls = get_runtime_class(os_name)
     if runtime_cls:
         active_runtime = runtime_cls(vm)
-        return f"QEMU initialized with profile [{profile}]. Active Driver: {runtime_cls.__name__}"
 
-    return f"QEMU initialized with profile [{profile}]. Warning: Target OS runtime driver missing."
+    msg = f"QEMU initialized with profile [{profile}]."
+    if runtime_cls:
+        msg += f" Active Driver: {runtime_cls.__name__}."
+    else:
+        msg += " Warning: Target OS runtime driver missing."
+
+    if wait_boot:
+        booted = vm.wait_for_boot(timeout=boot_timeout)
+        if not booted:
+            return msg + f" WARNING: boot-ready marker not seen within {boot_timeout}s."
+        msg += " Boot-ready marker detected."
+        # Enter the command shell once so subsequent commands are reliable.
+        if active_runtime and hasattr(active_runtime, "enter_command_shell"):
+            if active_runtime.enter_command_shell():
+                msg += " Command shell ready."
+            else:
+                msg += " WARNING: could not confirm command shell."
+        # Try the dedicated telnet shell (telnetd runs by default on lyrical).
+        if active_runtime and hasattr(active_runtime, "connect_telnet"):
+            if active_runtime.connect_telnet():
+                active_runtime.enter_command_shell()
+                msg += " Telnet shell connected (clean interactive channel)."
+            else:
+                msg += " (telnet not available; using serial console)."
+    return msg
 
 @mcp.tool()
 def stop_qemu() -> str:
@@ -155,4 +184,71 @@ def app_fetch_logs(target_id: str, tail_lines: int = 100) -> str:
         return "Error: No active target runtime. Call start_qemu first."
 
     return active_runtime.fetch_logs(target_id, tail_lines)
+
+
+# =====================================================================
+# VXWORKS DIAGNOSTIC TOOLS (fault capture + kernel routines)
+# =====================================================================
+
+@mcp.tool()
+def app_exec_detailed(path: str, args: List[str] = None, stack_size: str = None,
+                      timeout: float = 30.0) -> dict:
+    """Launch an RTP by path and return a classified outcome with raw console text.
+
+    outcome is one of: LAUNCHED (with rtp_id), INSTANTIATE_FAILED, SIGNAL_<n>, NO_LAUNCH.
+    stack_size (e.g. '0x10000000') raises rtpSpStackSize before launch.
+    """
+    if not active_runtime:
+        return {"error": "No active target runtime. Call start_qemu first."}
+    if not hasattr(active_runtime, "exec_detailed"):
+        return {"error": "Active runtime does not support exec_detailed."}
+    opts = {"timeout": timeout}
+    if stack_size:
+        opts["stack_size"] = stack_size
+    return active_runtime.exec_detailed(path, args or [], opts)
+
+
+@mcp.tool()
+def run_kernel_routine(routine: str, timeout: float = 15.0) -> str:
+    """Run a VxWorks C/kernel-shell routine (e.g. 'taskShow', 'rtpShow 0x..') from the
+    command shell via the 'C <routine>' prefix. No shell switching required."""
+    if not active_runtime:
+        return "Error: No active target runtime. Call start_qemu first."
+    if not hasattr(active_runtime, "run_kernel_routine"):
+        return "Error: Active runtime has no kernel-routine support."
+    return active_runtime.run_kernel_routine(routine, timeout=timeout)
+
+
+@mcp.tool()
+def connect_telnet(host: str = "192.168.200.1", port: int = 23, retries: int = 20) -> str:
+    """Open a dedicated telnet shell to the VxWorks target (telnetd runs by default).
+
+    Telnet is a clean interactive channel; the serial console remains the boot/EDR/
+    crash channel. After connecting, interactive commands route over telnet while
+    crash/INSTANTIATE detection still watches serial."""
+    if not active_runtime:
+        return "Error: No active target runtime. Call start_qemu first."
+    if not hasattr(active_runtime, "connect_telnet"):
+        return "Error: Active runtime has no telnet support."
+    if active_runtime.connect_telnet(host=host, port=port, retries=retries):
+        active_runtime.enter_command_shell()
+        return f"Telnet shell connected to {host}:{port}."
+    return f"Failed to connect telnet to {host}:{port}."
+
+
+@mcp.tool()
+def edr_show(timeout: float = 20.0) -> dict:
+    """Dump + parse the VxWorks EDR fatal record after a crash.
+
+    Returns the Program Counter (pc), fault/access_address, exception, task, and the
+    raw edrShow text. Use after an RTP dies with signal 11 to classify the fault:
+      - pc == access_address  -> jumped to a bad/corrupt function pointer
+      - access_address tiny    -> NULL / near-null deref
+      - access_address huge    -> unmapped/protected memory access
+    """
+    if not active_runtime:
+        return {"error": "No active target runtime. Call start_qemu first."}
+    if not hasattr(active_runtime, "edr_show"):
+        return {"error": "Active runtime does not support edr_show."}
+    return active_runtime.edr_show(timeout=timeout)
 
