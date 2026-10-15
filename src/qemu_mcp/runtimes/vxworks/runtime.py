@@ -43,7 +43,7 @@ class VxWorksRuntime(TargetRuntime):
     # ------------------------------------------------------------- transports
     def connect_telnet(self, host: str = "192.168.200.1", port: int = 23,
                        retries: int = 20) -> bool:
-        """Open a telnet shell to the target (telnetd runs by default on lyrical).
+        """Open a telnet shell to the target (telnetd runs by default on many VxWorks images).
 
         Telnet is a clean, dedicated shell channel; the serial console stays as the
         boot/EDR/crash channel. Once connected, interactive commands route here.
@@ -141,7 +141,7 @@ class VxWorksRuntime(TargetRuntime):
     def upload(self, host_path: str, remote_path: str) -> bool:
         """Deploy a file into the FAT image.
 
-        For the lyrical disk profile the image is a raw FAT partition; we write with
+        For disk profiles the drive image is a raw FAT partition; we write with
         mtools (mcopy) which is reliable (fusefat `cp` corrupts files mid-write).
         Requires the VM to be stopped (exclusive access to the image file).
         """
@@ -162,10 +162,14 @@ class VxWorksRuntime(TargetRuntime):
             if r.returncode != 0:
                 logger.error("mcopy failed: %s", r.stderr.strip())
                 return False
-            # verify byte-exact
+            # verify byte-exact: size must appear, and the file's 8.3 short name.
+            # mdir prints 8.3 as "<base up to 8>  <ext>" (space-separated, no dot),
+            # so match on the dot-less basename (NOT name[:8], which can include the
+            # dot for short names like 'hello.vxe' and never matches).
             chk = subprocess.run(["mdir", "-i", img, "::/bin"], capture_output=True, text=True)
             want = str(os.path.getsize(host_path))
-            return want in chk.stdout and name.lower()[:8] in chk.stdout.lower()
+            base = os.path.splitext(name)[0].lower()[:8]
+            return want in chk.stdout and base in chk.stdout.lower()
         except FileNotFoundError:
             logger.error("upload: mtools (mcopy/mdir) not installed on host.")
             return False

@@ -1,6 +1,6 @@
 # tests/test_vxworks_runtime.py
 """Unit tests for the VxWorks runtime that need no live QEMU:
-EDR fault-record parsing, outcome classification regexes, and the lyrical profile.
+EDR fault-record parsing, outcome classification regexes, and the disk profile.
 """
 import pytest
 from qemu_mcp.qemu.profile import QEMUProfile, PROFILES
@@ -9,21 +9,21 @@ from qemu_mcp.runtimes.vxworks.runtime import (
 )
 
 
-def test_lyrical_profile_builds_proven_args():
-    p = QEMUProfile("x.log", "vxworks_lyrical_disk")
+def test_disk_profile_builds_expected_args():
+    p = QEMUProfile("x.log", "vxworks_x86_64_disk")
     assert p.memory == "2G"
     assert p.platform_args() == ["-machine", "q35", "-cpu", "Nehalem"]
-    drive = p.drive_args("/data/ros2.img")
-    assert "file=/data/ros2.img,if=none,id=ros2disk,format=raw" in drive
+    drive = p.drive_args("/data/vx.img")
+    assert "file=/data/vx.img,if=none,id=vxdisk,format=raw" in drive
     assert "ich9-ahci,id=ahci" in drive
-    assert "ide-hd,drive=ros2disk,bus=ahci.0" in drive
+    assert "ide-hd,drive=vxdisk,bus=ahci.0" in drive
     assert "Done executing startup script" in p.boot_ready_markers()
     assert p.command_shell_prompt == "[vxWorks"
     assert p.kernel_shell_prompt == "->"
 
 
 def test_disk_profile_requires_image():
-    p = QEMUProfile("x.log", "vxworks_lyrical_disk")
+    p = QEMUProfile("x.log", "vxworks_x86_64_disk")
     with pytest.raises(ValueError):
         p.drive_args(None)
 

@@ -30,14 +30,40 @@ def start_qemu(kernel_path: str, profile: str = "vxworks_x86_64_default",
     """
     Boots the QEMU engine utilizing an explicit or default parameter configuration profile.
 
-    For the lyrical ROS 2 disk image, use profile='vxworks_lyrical_disk' and pass
-    drive_image=/path/to/output/ros2.img. When wait_boot is True, blocks until the
-    target prints a boot-ready marker and the command shell is entered.
+    drive_image (disk-image profiles only): absolute path to the RAW FAT disk image
+    to attach. The server does NOT hardcode or locate it — pass the image your board
+    build system produces (its 'make image'/deploy output), or one generated per the
+    README (dd + mkfs.vfat + mcopy). drive_args() raises if a disk profile is used
+    without a drive_image. When wait_boot is True, blocks until the target prints a
+    boot-ready marker and the command shell is entered.
     """
     global active_runtime
 
     if profile not in PROFILES:
         return f"Error: Configuration profile '{profile}' is unrecognized."
+
+    # Arch compatibility: the kernel ELF's machine must match the profile's QEMU arch,
+    # otherwise QEMU boots the wrong qemu-system-* and the target silently hangs. A
+    # definite mismatch is refused; an unreadable/non-ELF kernel is a warning (don't
+    # block exotic kernels). The disk image inherits the kernel's arch, so checking
+    # the kernel is sufficient.
+    try:
+        from .runtimes.detector import get_arch_info
+        info = get_arch_info(kernel_path)
+        kernel_arch = info["arch"]
+        profile_arch = PROFILES[profile]["arch"]
+        if kernel_arch != profile_arch:
+            return (
+                f"Error: architecture mismatch — kernel '{kernel_path}' is "
+                f"{kernel_arch} but profile '{profile}' targets {profile_arch}. "
+                f"Pick a {kernel_arch} profile (e.g. qemu_bin "
+                f"qemu-system-{kernel_arch})."
+            )
+    except FileNotFoundError:
+        return f"Error: kernel image not found: {kernel_path}"
+    except Exception as e:
+        # Non-ELF or unsupported machine: warn via log, proceed (caller may know best).
+        logger.warning("arch compat check skipped for %s: %s", kernel_path, e)
 
     boot_success = vm.start(kernel_path, profile_name=profile,
                             extra_args=extra_args, drive_image=drive_image)
@@ -70,7 +96,7 @@ def start_qemu(kernel_path: str, profile: str = "vxworks_x86_64_default",
                 msg += " Command shell ready."
             else:
                 msg += " WARNING: could not confirm command shell."
-        # Try the dedicated telnet shell (telnetd runs by default on lyrical).
+        # Try the dedicated telnet shell (telnetd runs by default on many VxWorks images).
         if active_runtime and hasattr(active_runtime, "connect_telnet"):
             if active_runtime.connect_telnet():
                 active_runtime.enter_command_shell()

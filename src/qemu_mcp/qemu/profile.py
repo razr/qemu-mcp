@@ -31,20 +31,22 @@ PROFILES: Dict[str, Dict[str, Any]] = {
         "command_shell_prompt": "[vxWorks",
     },
 
-    # Lyrical ROS 2 disk-image profile — mirrors the proven working boot line:
+    # Generic VxWorks x86_64 disk-image profile. Boots a VxWorks kernel and attaches a
+    # raw FAT disk image (programs are mcopy'd into ::/bin, read from /bin on target):
     #   qemu-system-x86_64 -m 2G -machine q35 -cpu Nehalem
     #     -kernel <vxWorks>
-    #     -net nic -net tap,ifname=tap0,script=no,downscript=no
-    #     -display none -serial mon:stdio
-    #     -append "bootline:fs(0,0)host:/vxWorks h=192.168.200.254 ... s=/ata0/vxscript"
+    #     -net nic -net tap,ifname=tap0,script=no,downscript=no   (tap0 must pre-exist)
+    #     -display none
+    #     -append "<bootline>"
     #     -device ich9-ahci,id=ahci
-    #     -drive file=output/ros2.img,if=none,id=ros2disk,format=raw
-    #     -device ide-hd,drive=ros2disk,bus=ahci.0
+    #     -drive file=<image>,if=none,id=vxdisk,format=raw
+    #     -device ide-hd,drive=vxdisk,bus=ahci.0
     #
-    # NOTE: no -enable-kvm (TCG, matches the proven setup); the disk image path is
-    # supplied at start() time via the `drive_image` argument and substituted into
-    # drive_args by QEMUProfile.
-    "vxworks_lyrical_disk": {
+    # The disk image path is NOT hardcoded: it is supplied at start() time via the
+    # `drive_image` argument and substituted into {drive_image}. The bootline below is
+    # a sane default (host 192.168.200.254 / target 192.168.200.1, matching the tap0
+    # setup in the README); override per deployment as needed. TCG (no -enable-kvm).
+    "vxworks_x86_64_disk": {
         "os": "vxworks",
         "arch": "x86_64",
         "qemu_bin": "qemu-system-x86_64",
@@ -54,11 +56,11 @@ PROFILES: Dict[str, Dict[str, Any]] = {
             "-net", "nic",
             "-net", "tap,ifname=tap0,script=no,downscript=no",
         ],
-        # {drive_image} is substituted with the real image path at build time.
+        # {drive_image} is substituted with the real image path at start() time.
         "drive_args": [
             "-device", "ich9-ahci,id=ahci",
-            "-drive", "file={drive_image},if=none,id=ros2disk,format=raw",
-            "-device", "ide-hd,drive=ros2disk,bus=ahci.0",
+            "-drive", "file={drive_image},if=none,id=vxdisk,format=raw",
+            "-device", "ide-hd,drive=vxdisk,bus=ahci.0",
         ],
         "append_args": (
             "bootline:fs(0,0)host:/vxWorks "
@@ -70,11 +72,10 @@ PROFILES: Dict[str, Dict[str, Any]] = {
         "command_shell_prompt": "[vxWorks",
     },
 
-    # KVM-accelerated variant of the lyrical disk profile. ~faster for CPU-heavy
-    # workloads (rclrs/DDS init). Requires /dev/kvm rw + membership in the kvm group.
-    # Uses -cpu host (KVM passthrough) + -smp 4 (SDK default). Falls back is manual:
-    # if KVM is unavailable, use vxworks_lyrical_disk (TCG).
-    "vxworks_lyrical_disk_kvm": {
+    # KVM-accelerated variant of the x86_64 disk profile. Faster for CPU-heavy
+    # targets. Requires /dev/kvm rw + membership in the kvm group. Uses -cpu host
+    # (KVM passthrough) + -smp 4. If KVM is unavailable, use vxworks_x86_64_disk (TCG).
+    "vxworks_x86_64_disk_kvm": {
         "os": "vxworks",
         "arch": "x86_64",
         "qemu_bin": "qemu-system-x86_64",
@@ -86,8 +87,8 @@ PROFILES: Dict[str, Dict[str, Any]] = {
         ],
         "drive_args": [
             "-device", "ich9-ahci,id=ahci",
-            "-drive", "file={drive_image},if=none,id=ros2disk,format=raw",
-            "-device", "ide-hd,drive=ros2disk,bus=ahci.0",
+            "-drive", "file={drive_image},if=none,id=vxdisk,format=raw",
+            "-device", "ide-hd,drive=vxdisk,bus=ahci.0",
         ],
         "append_args": (
             "bootline:fs(0,0)host:/vxWorks "
