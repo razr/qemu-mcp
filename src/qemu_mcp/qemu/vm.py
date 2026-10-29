@@ -2,6 +2,7 @@
 import os
 import subprocess
 import logging
+import tempfile
 import time
 from typing import List, Optional, Dict, Any
 
@@ -23,7 +24,15 @@ class QEMUVirtualMachine:
         self.profile: Optional[QEMUProfile] = None
         self.host_target = os.getenv("MCP_QEMU_HOST", "127.0.0.1")
         self.monitor = QEMUMonitor(host=self.host_target, port=15556)
-        self.log_path = "qemu_vms.log"
+        # Where to write the QEMU process stdout/err log. Default to a stable
+        # per-user temp location instead of the server's (arbitrary) cwd, so the
+        # log never litters whatever directory kiro-cli happened to launch the
+        # MCP server from. Overridable via QEMU_MCP_LOG.
+        default_log_dir = os.path.join(tempfile.gettempdir(), "qemu-mcp")
+        os.makedirs(default_log_dir, exist_ok=True)
+        self.log_path = os.getenv(
+            "QEMU_MCP_LOG", os.path.join(default_log_dir, "qemu_vms.log")
+        )
         self.args: List[str] = []
         self.binary: str = ""
 

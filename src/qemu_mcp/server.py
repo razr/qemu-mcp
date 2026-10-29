@@ -24,6 +24,45 @@ active_runtime: Optional[TargetRuntime] = None
 # =====================================================================
 
 @mcp.tool()
+def list_profiles() -> str:
+    """
+    List the QEMU configuration profiles supported out of the box.
+
+    Use this to discover which `profile` values `start_qemu` accepts, and what each
+    one targets (OS/arch, networking, whether it needs a `drive_image`, and whether a
+    telnet second console is reachable). Returns one line per profile.
+
+    Second console: the serial console is always the primary (boot/EDR/crash) channel.
+    Profiles on a `tap` backend also expose the target over telnet at its static IP
+    (telnetd runs by default) — use the `connect_telnet` tool for a clean interactive
+    channel (e.g. a subscriber on telnet while a publisher runs on serial). user-net
+    (slirp) profiles are NAT'd, so telnet is not directly reachable at that IP.
+    """
+    import re
+    lines = []
+    for name, p in PROFILES.items():
+        needs_disk = any("{drive_image}" in a for a in p.get("drive_args", []))
+        net_list = p.get("network_args", [])
+        net = " ".join(net_list) or "none"
+        accel = "kvm" if any("-enable-kvm" in a for a in p.get("platform_args", [])) else "tcg"
+        # Telnet second path: reachable on a tap backend at the target IP from the
+        # boot line's e= field; NAT'd (not directly reachable) on user-net.
+        is_tap = any("tap" in a for a in net_list)
+        telnet = "no (user-net/NAT)"
+        if is_tap:
+            m = re.search(r"\be=([0-9.]+)", p.get("append_args", "") or "")
+            ip = m.group(1) if m else "192.168.200.1"
+            telnet = f"{ip}:23 (connect_telnet)"
+        lines.append(
+            f"{name}: os={p['os']} arch={p['arch']} accel={accel} "
+            f"mem={p.get('memory','?')} net=[{net}] "
+            f"drive_image={'required' if needs_disk else 'no'} "
+            f"telnet={telnet}"
+        )
+    return "Available QEMU profiles:\n" + "\n".join(lines)
+
+
+@mcp.tool()
 def start_qemu(kernel_path: str, profile: str = "vxworks_x86_64_default",
                extra_args: str = None, drive_image: str = None,
                wait_boot: bool = True, boot_timeout: float = 120.0) -> str:
